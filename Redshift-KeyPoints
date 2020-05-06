@@ -1,0 +1,11 @@
+1. Tables created with the LIKE option don't inherit primary and foreign key constraints. Distribution style, sort keys,BACKUP, and NULL properties are inherited by LIKE tables
+2. CREATE TABLE AS (CTAS) tables don't inherit constraints, identity columns, default column values, or the primary key from the table that they were created from
+   a. You can't create customized Encoding for created table. RS automatically assigns compression encoding 
+   b. Distribution style and sort key for the new table are based on the query plan for the SELECT clause based on explain plan.
+   c. You can explicitly specify distribution style and sort key while CTAS command
+   d. Redshift automatically analyzes tables that you create with CTAS commands. No need to run the ANALYZE command on these tables when they are first created.
+   e. Inside Stored Proc, you can't use raise command for CTAS tables. 
+3. For tables, such as staging tables, that don't contain critical data, specify BACKUP NO to save processing time when creating snapshots and restoring from snapshots and to reduce storage space on Amazon Simple Storage Service
+4. Interleaved sorting carries a small overhead cost for data loading and vacuuming operations as compared to "Sort Key". Don’t use an interleaved sort key on columns with monotonically increasing attributes, such as identity columns, dates, or timestamps.
+5. Wide tables - If a table is too wide(max. bytes 65535)  for inserting or selecting, you receive the following error.
+
