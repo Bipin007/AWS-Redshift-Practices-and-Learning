@@ -157,3 +157,7 @@ from stl_explain
 where plannode like '%missing statistics%' 
 group by plannode 
 order by 2 desc;
+
+-- Free storage space in Cluster
+select sum(capacity)/1024 as capacity_gb, sum(used)/1024 as used_gb,(capacity_gb - used_gb) as free_gb
+from stv_partitions where part_begin =0;
