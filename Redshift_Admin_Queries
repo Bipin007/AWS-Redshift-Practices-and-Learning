@@ -159,5 +159,6 @@ group by plannode
 order by 2 desc;
 
 -- Free storage space in Cluster
+-- Its Nominal Disk Space (which customer is entitled for) not Raw disk space that is used by Redshift (for 160GB, more 160GB(adjacent node backup space) + 80GB(Metadata storage))
 select sum(capacity)/1024 as capacity_gb, sum(used)/1024 as used_gb,(capacity_gb - used_gb) as free_gb
 from stv_partitions where part_begin =0;
