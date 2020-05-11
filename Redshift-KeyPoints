@@ -8,5 +8,9 @@
 3. For tables, such as staging tables, that don't contain critical data, specify BACKUP NO to save processing time when creating snapshots and restoring from snapshots and to reduce storage space on Amazon Simple Storage Service
 4. Interleaved sorting carries a small overhead cost for data loading and vacuuming operations as compared to "Sort Key". Don’t use an interleaved sort key on columns with monotonically increasing attributes, such as identity columns, dates, or timestamps.
 5. Wide tables - If a table is too wide(max. bytes 65535)  for inserting or selecting, you receive the following error.
-6. Vacuum fails on wide table and bigger table so the recommendation is use "Deep Copy" its like CTAS and then drop original.So while new table and insertion rows are inserted in sorted order.
-   But Deep copy involves some small outage whereas in Vacuum its not. So ensure a way to handle missing data. 
+6. Vacuum fails on wide table and bigger table but "Deep Copy" can be used as alternative. Deep copy also sorts data while inserting into new table.
+   But Deep copy involves some small outage whereas in Vacuum its not. So ensure a way to handle missing data.
+7. Commit is done in 2 phase -> 1 current node commit and then other adjacent mirrored node should also commit(Then only Leader node marks a complete commit)
+   Commit has queue of 1 i.e. only one commit at a time that means 4gb movement to disk, so avoid frequent commit
+8. TEMP table data doesn't gets mirrored to other adjacent node, thats the advantage as compared to Permanent table.
+9. WLM is divinding yours available memory(RAM) (Note: if total cluster memory is 500GB then 50% is reserved for internal, so available memory is 250gb); if WLM1 is 10% memory that means 25gb memory and not 50gb
