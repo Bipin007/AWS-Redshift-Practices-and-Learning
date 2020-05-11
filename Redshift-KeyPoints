@@ -14,3 +14,12 @@
    Commit has queue of 1 i.e. only one commit at a time that means 4gb movement to disk, so avoid frequent commit
 8. TEMP table data doesn't gets mirrored to other adjacent node, thats the advantage as compared to Permanent table.
 9. WLM is divinding yours available memory(RAM) (Note: if total cluster memory is 500GB then 50% is reserved for internal, so available memory is 250gb); if WLM1 is 10% memory that means 25gb memory and not 50gb
+   Try creating less number of WLM Queues (based on user group or query group (session level) - There is 2 default queues a. Default Queue and b. Queue for Super user. Queue(1-4) is reserved for internal operation, Queue(5) is for super user, then starts user defined queues (you can have upto 8 user defined queues)
+   WLM has slots that defines concurreny - WLM Queue memory is divided among slots
+   Don't allocate 100% of available memory - this way if some queue needs more memory then it can be taken from remaining memory
+   Total number of slots in WLM is recommended to be between 8 to 15. However in Redshift max. concurrency is 50 but recommended is between 8 to 15.
+   Does WLM require restart -- depends there are some static and dynamic parameter - read documentation 
+   You can assign 2 slots to single bad query if requires more memory by WLM_QUERY_SLOT_COUNT
+   you can loginn as superuser, you need to "SET querygroup to Superuser" to be in superuser WLM queue else you won't
+   you can perform some action based on explain plan parameter known as "Query Monitoring Rule (QMR) --> 3 actions are logged, abort, hopped
+   SQA - Let short query do not stuck behind long runnung queries. Default 5sec, range is 1sec to 20sec
