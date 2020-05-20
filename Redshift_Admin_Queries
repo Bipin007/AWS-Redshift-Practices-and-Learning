@@ -165,3 +165,11 @@ from stv_partitions where part_begin =0;
 
 -- It says if drive is failed in disk
 select * from stv_partitions  where failed = 1;
+
+--- SP Step and debug step -- 
+select * from SVL_STORED_PROC_CALL
+where querytxt like '%hdl_services_sp.sp_srv_asset_sals_revn_opp_cds_smax_fs_bipin_v4_stgabove_v1()%'
+--order by starttime desc; 
+select * from SVL_STORED_PROC_MESSAGES 
+where xid in ('12565099') and pid in (21505) 
+order by recordtime;
