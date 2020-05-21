@@ -173,3 +173,18 @@ where querytxt like '%hdl_services_sp.sp_srv_asset_sals_revn_opp_cds_smax_fs_bip
 select * from SVL_STORED_PROC_MESSAGES 
 where xid in ('12565099') and pid in (21505) 
 order by recordtime;
+
+-- Query to give execution done in particular PID
+SELECT a.query, 
+       b.starttime, 
+       b.endtime, 
+       ( b.endtime - b.starttime ) / 1000000 AS duration_sec, 
+       Round(a.query_cpu_usage_percent)      AS cpu_usage_percent, 
+       Substring(b.querytxt, 1, 80)          AS querytxt 
+FROM   svl_query_metrics_summary a, 
+       stl_query b 
+WHERE  a.query = b.query 
+       and b.pid=pg_backend_pid()
+       AND b.starttime BETWEEN Dateadd(hour, -1, sysdate) AND sysdate 
+       AND a.userid > 1 
+ORDER  BY b.starttime DESC;
