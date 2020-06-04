@@ -23,3 +23,7 @@
    you can loginn as superuser, you need to "SET querygroup to Superuser" to be in superuser WLM queue else you won't
    you can perform some action based on explain plan parameter known as "Query Monitoring Rule (QMR) --> 3 actions are logged, abort, hopped
    SQA - Let short query do not stuck behind long runnung queries. Default 5sec, range is 1sec to 20sec
+10. Lock in Redshift is little different as compared to other MPP system. In Redshift there is nothing like Row level lock
+    so all locks are applied at table level. DML (Insert/Update/Delete) blocks other DML, so that means only 1 DML query can
+    be run at a time and other DML on same table will have to wait for other to commit. whereas multiple select on same table
+    can be performed without locking.
