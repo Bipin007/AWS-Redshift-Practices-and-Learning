@@ -188,3 +188,17 @@ WHERE  a.query = b.query
        AND b.starttime BETWEEN Dateadd(hour, -1, sysdate) AND sysdate 
        AND a.userid > 1 
 ORDER  BY b.starttime DESC;
+
+--See already inflight query and kill them if blocking your query
+-- Inflight query (Running Query)
+select
+  userid
+  , query
+  , pid
+  , starttime
+  , text as text
+from stv_inflight;
+
+--KIll query
+cancel PID;
+
