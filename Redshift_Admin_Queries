@@ -202,3 +202,18 @@ from stv_inflight;
 --KIll query
 cancel PID;
 
+-- Get the column name and its number for all views 
+SELECT trim(pgn.nspname) AS schema_name, 
+       trim(pgc.relname) AS view_name,
+       det.attnum        AS column_num,
+       det.attname       AS column_name,
+       def.type          AS data_type
+FROM pg_class as pgc
+JOIN pg_namespace as pgn on pgn.oid = pgc.relnamespace
+LEFT OUTER JOIN (select attrelid, attname, attnum from pg_attribute where attnum>0) as det on det.attrelid = pgc.oid
+LEFT OUTER JOIN pg_table_def def on (def.schemaname=pgn.nspname and def.tablename=pgc.relname and def."column"=det.attname)
+WHERE schema_name NOT IN ('pg_catalog','pg_toast','information_schema')
+AND pgc.relkind ='v' 
+order by 1,2,3;
+
+
