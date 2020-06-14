@@ -468,3 +468,29 @@ from stl_query join stl_querytext using (query)
 order by query,sequence 
 limit 100;
 
+-- Get In flight query with username and delay in queue
+select 
+  a.userid, 
+  cast(u.usename as varchar(100)), 
+  a.query, 
+  a.label, 
+  a.pid, 
+  a.starttime, 
+  DATEDIFF(minutes, a.starttime, getdate()) as delay_in_min, 
+  b.query as querytext
+from stv_inflight a, stv_recents b, pg_user u
+where a.pid = b.pid and a.userid = u.usesysid;
+
+-- Get the locks on table and kill the session 
+select 
+  table_id, 
+  last_update, 
+  last_commit, 
+  lock_owner_pid, 
+  lock_status 
+from stv_locks 
+order by last_update asc; 
+
+cancel <PID>;
+
+
