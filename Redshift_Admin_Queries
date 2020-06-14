@@ -230,4 +230,241 @@ where
   DATEDIFF(minutes, starttime, getdate()) > 30
 order by starttime;
 
+-- find which tables have been granted to a group and also which users have been added to the group
+select g.groname,u.usename FROM pg_group g, pg_user u WHERE u.usesysid = ANY(g.grolist) ORDER BY 1,2;
+
+SELECT
+    u.usename,
+    s.schemaname,
+    has_schema_privilege(u.usename,s.schemaname,'create') AS user_has_select_permission,
+    has_schema_privilege(u.usename,s.schemaname,'usage') AS user_has_usage_permission
+FROM
+    pg_user u
+CROSS JOIN
+    (SELECT DISTINCT schemaname FROM pg_tables) s
+WHERE
+    u.usename = 'awsuser'
+;
+
+-- View table ID, database, schema, and table name
+select distinct(id) table_id
+,trim(datname)   db_name
+,trim(nspname)   schema_name
+,trim(relname)   table_name
+from stv_tbl_perm
+join pg_class on pg_class.oid = stv_tbl_perm.id
+join pg_namespace on pg_namespace.oid = relnamespace
+join pg_database on pg_database.oid = stv_tbl_perm.db_id;
+
+-- List the number of columns per Amazon Redshift table
+select nspname, relname, max(attnum) as num_cols
+from pg_attribute a, pg_namespace n, pg_class c
+where n.oid = c.relnamespace and  a.attrelid = c.oid
+and c.relname not like '%pkey'
+and n.nspname not like 'pg%'
+and n.nspname not like 'information%'
+group by 1, 2
+order by 1, 2;
+
+-- List the schemas and table row count in a database
+select datname, nspname, relname, sum(rows) as rows
+from pg_class, pg_namespace, pg_database, stv_tbl_perm
+where pg_namespace.oid = relnamespace
+and pg_class.oid = stv_tbl_perm.id
+and pg_database.oid = stv_tbl_perm.db_id
+and datname ='dev'
+group by datname, nspname, relname
+order by datname, nspname, relname;
+
+-- List table IDs, data types, column names, and table names
+select distinct attrelid, rtrim(name), attname, typname
+from pg_attribute a, pg_type t, stv_tbl_perm p
+where t.oid=a.atttypid and a.attrelid=p.id
+and a.attrelid between 100100 and 110000
+and typname not in('oid','xid','tid','cid')
+order by a.attrelid asc, typname, attname;
+
+-- Count the number of data blocks for each column in a table
+select col, count(*)
+from stv_blocklist s, pg_class p
+where s.tbl=p.oid and relname='lineorder'
+group by col
+order by col;
+
+***** Analysis of skewness at slice or stream level
+
+--SVL_QUERY_REPORT - Shows steps and statistics in more detail than in the query, at slice level;
+--SVL_QUERY_SUMMARY - Shows steps and statistics in more detail than in the query,at stream level; 
+
+select query, elapsed, substring
+from svl_qlog
+order by query
+desc limit 5;  
+
+-- Order the results by segment, step, elapsed_time, and rows; if one slice has more value that means its skewed
+select * from svl_query_report where query = MyQueryID order by segment, step, elapsed_time, rows;
+
+-- Identifying queries with nested loops
+select query, trim(querytxt) as SQL, starttime 
+from stl_query 
+where query in (
+select distinct query 
+from stl_alert_event_log 
+where event like 'Nested Loop Join in the query plan%') 
+order by starttime desc;
+
+-- Top 50 bad queries 
+select trim(database) as db, count(query) as n_qry, 
+max(substring (qrytext,1,80)) as qrytext, 
+min(run_minutes) as "min" , 
+max(run_minutes) as "max", 
+avg(run_minutes) as "avg", sum(run_minutes) as total,  
+max(query) as max_query_id, 
+max(starttime)::date as last_run, 
+sum(alerts) as alerts, aborted
+from (select userid, label, stl_query.query, 
+trim(database) as database, 
+trim(querytxt) as qrytext, 
+md5(trim(querytxt)) as qry_md5, 
+starttime, endtime, 
+(datediff(seconds, starttime,endtime)::numeric(12,2))/60 as run_minutes,     
+alrt.num_events as alerts, aborted 
+from stl_query 
+left outer join 
+(select query, 1 as num_events from stl_alert_event_log group by query ) as alrt 
+on alrt.query = stl_query.query
+where userid <> 1 and starttime >=  dateadd(day, -7, current_date)) 
+group by database, label, qry_md5, aborted
+order by total desc limit 50;
+
+-- if skew is > 4 change distribution style, pct_unsorted > 20%; run Vacuum, 
+select trim(pgn.nspname) as schema, 
+trim(a.name) as table, id as tableid, 
+decode(pgc.reldiststyle,0, 'even',1,det.distkey ,8,'all') as distkey, dist_ratio.ratio::decimal(10,4) as skew, 
+det.head_sort as "sortkey", 
+det.n_sortkeys as "#sks", b.mbytes,  
+decode(b.mbytes,0,0,((b.mbytes/part.total::decimal)*100)::decimal(5,2)) as pct_of_total, 
+decode(det.max_enc,0,'n','y') as enc, a.rows, 
+decode( det.n_sortkeys, 0, null, a.unsorted_rows ) as unsorted_rows , 
+decode( det.n_sortkeys, 0, null, decode( a.rows,0,0, (a.unsorted_rows::decimal(32)/a.rows)*100) )::decimal(5,2) as pct_unsorted 
+from (select db_id, id, name, sum(rows) as rows, 
+sum(rows)-sum(sorted_rows) as unsorted_rows 
+from stv_tbl_perm a 
+group by db_id, id, name) as a 
+join pg_class as pgc on pgc.oid = a.id
+join pg_namespace as pgn on pgn.oid = pgc.relnamespace
+left outer join (select tbl, count(*) as mbytes 
+from stv_blocklist group by tbl) b on a.id=b.tbl
+inner join (select attrelid, 
+min(case attisdistkey when 't' then attname else null end) as "distkey",
+min(case attsortkeyord when 1 then attname  else null end ) as head_sort , 
+max(attsortkeyord) as n_sortkeys, 
+max(attencodingtype) as max_enc 
+from pg_attribute group by 1) as det 
+on det.attrelid = a.id
+inner join ( select tbl, max(mbytes)::decimal(32)/min(mbytes) as ratio 
+from (select tbl, trim(name) as name, slice, count(*) as mbytes
+from svv_diskusage group by tbl, name, slice ) 
+group by tbl, name ) as dist_ratio on a.id = dist_ratio.tbl
+join ( select sum(capacity) as  total
+from stv_partitions where part_begin=0 ) as part on 1=1
+where mbytes is not null 
+order by  mbytes desc;
+
+-- If min value is high look for ANALYZE or VACUUM, count is high; check STL_ALERT_EVENT_LOG
+select trim(s.perm_table_name) as table, 
+(sum(abs(datediff(seconds, s.starttime, s.endtime)))/60)::numeric(24,0) as minutes, 
+trim(split_part(l.event,':',1)) as event,  trim(l.solution) as solution, 
+max(l.query) as sample_query, count(*) 
+from stl_alert_event_log as l 
+left join stl_scan as s on s.query = l.query and s.slice = l.slice 
+and s.segment = l.segment and s.step = l.step
+where l.event_time >=  dateadd(day, -7, current_Date) 
+group by 1,3,4 
+order by 2 desc,6 desc;
+
+-- Missing stats; Run Analyze command
+select substring(trim(plannode),1,100) as plannode, count(*) 
+from stl_explain 
+where plannode like '%missing statistics%' 
+group by plannode 
+order by 2 desc;
+
+-- Free storage space in Cluster
+-- Its Nominal Disk Space (which customer is entitled for) not Raw disk space that is used by Redshift (for 160GB, more 160GB(adjacent node backup space) + 80GB(Metadata storage))
+select sum(capacity)/1024 as capacity_gb, sum(used)/1024 as used_gb,(capacity_gb - used_gb) as free_gb
+from stv_partitions where part_begin =0;
+
+-- It says if drive is failed in disk
+select * from stv_partitions  where failed = 1;
+
+--- SP Step and debug step -- 
+select * from SVL_STORED_PROC_CALL
+where querytxt like '%hdl_services_sp.sp_srv_asset_sals_revn_opp_cds_smax_fs_bipin_v4_stgabove_v1()%'
+--order by starttime desc; 
+select * from SVL_STORED_PROC_MESSAGES 
+where xid in ('12565099') and pid in (21505) 
+order by recordtime;
+
+-- Query to give execution done in particular PID
+SELECT a.query, 
+       b.starttime, 
+       b.endtime, 
+       ( b.endtime - b.starttime ) / 1000000 AS duration_sec, 
+       Round(a.query_cpu_usage_percent)      AS cpu_usage_percent, 
+       Substring(b.querytxt, 1, 80)          AS querytxt 
+FROM   svl_query_metrics_summary a, 
+       stl_query b 
+WHERE  a.query = b.query 
+       and b.pid=pg_backend_pid()
+       AND b.starttime BETWEEN Dateadd(hour, -1, sysdate) AND sysdate 
+       AND a.userid > 1 
+ORDER  BY b.starttime DESC;
+
+--See already inflight query and kill them if blocking your query
+-- Inflight query (Running Query)
+select
+  userid
+  , query
+  , pid
+  , starttime
+  , text as text
+from stv_inflight;
+
+--KIll query
+cancel PID;
+
+-- Get the column name and its number for all views 
+SELECT trim(pgn.nspname) AS schema_name, 
+       trim(pgc.relname) AS view_name,
+       det.attnum        AS column_num,
+       det.attname       AS column_name,
+       def.type          AS data_type
+FROM pg_class as pgc
+JOIN pg_namespace as pgn on pgn.oid = pgc.relnamespace
+LEFT OUTER JOIN (select attrelid, attname, attnum from pg_attribute where attnum>0) as det on det.attrelid = pgc.oid
+LEFT OUTER JOIN pg_table_def def on (def.schemaname=pgn.nspname and def.tablename=pgc.relname and def."column"=det.attname)
+WHERE schema_name NOT IN ('pg_catalog','pg_toast','information_schema')
+AND pgc.relkind ='v' 
+order by 1,2,3;
+
+--  list of all the queries running longer then 30 min
+select 
+  pid, 
+  trim(user_name) AS user_name, 
+  starttime, 
+  query, 
+  DATEDIFF(minutes, starttime, getdate()) as delay_in_mints, 
+  status
+from stv_recents 
+where 
+  status='Running' and  
+  DATEDIFF(minutes, starttime, getdate()) > 30
+order by starttime;
+
+-- Get the full querytext of a query stored in chunks of sequence
+select query, starttime, text, "sequence" 
+from stl_query join stl_querytext using (query) 
+order by query,sequence 
+limit 100;
 
