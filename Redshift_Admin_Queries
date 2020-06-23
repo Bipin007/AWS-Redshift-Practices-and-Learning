@@ -493,4 +493,21 @@ order by last_update asc;
 
 cancel <PID>;
 
+--- Table with its row_count
+select
+trim(datname)   db_name
+,trim(nspname)   schema_name
+,trim(relname)   table_name
+,sum(rows) as rows
+from stv_tbl_perm
+join pg_class on pg_class.oid = stv_tbl_perm.id
+join pg_namespace on pg_namespace.oid = relnamespace
+join pg_database on pg_database.oid = stv_tbl_perm.db_id
+where lower(relname) in 
+(
+‘All your tablenames’
+)
+group by db_name, schema_name, table_name
+order by table_name,db_name, schema_name;
+
 
