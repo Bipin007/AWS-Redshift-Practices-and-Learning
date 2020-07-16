@@ -31,3 +31,7 @@ If you have more than 10 queries that need to be running at all times (or most o
     so all locks are applied at table level. DML (Insert/Update/Delete) blocks other DML, so that means only 1 DML query can
     be run at a time and other DML on same table will have to wait for other to commit. whereas multiple select on same table
     can be performed without locking.
+12. Can we use Elastic resize to move from ra3.4xlarge to ra3.16xlarge ?
+Answer is yes. But NOT for all combinations. Key is Elastic Resize (ES) keeps the total # of slices constant before and after.  
+There are also limits on the # of slices that each target RA3.16xl node can have.  
+AFAK min=8 slices and max=32 slices per RA3.16xl node. 
