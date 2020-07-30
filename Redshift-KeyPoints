@@ -28,7 +28,7 @@ The major con to Auto WLM is that you cannot determine the number of queries tha
 I believe with Auto WLM, only 10 queries can run at a time.
 If you have more than 10 queries that need to be running at all times (or most of the time), this probably isn’t a good option for you.   
 11. Lock in Redshift is little different as compared to other MPP system. In Redshift there is nothing like Row level lock
-    so all locks are applied at table level. DML (Insert/Update/Delete) blocks other DML, so that means only 1 DML query can
+    as all locks are applied at table level. DML (Insert/Update/Delete) blocks other DML, so that means only 1 DML query can
     be run at a time and other DML on same table will have to wait for other to commit. whereas multiple select on same table
     can be performed without locking.
 12. Can we use Elastic resize to move from ra3.4xlarge to ra3.16xlarge ?
