@@ -20,6 +20,14 @@ Keep procedures simple and nest procedures for complex processes
 Try to keep the logic of each stored procedure as simple possible. You maximize your flexibility and make your stored procedures more understandable by keeping them simple.
 The code of your stored procedures can become complex as you refine and enhance them. When you encounter a long and complex stored procedure, you can often simplify by moving sub-elements into a separate procedure that is called from the original procedure.
 
+
+Metadata Tables - 
+  SVL_STORED_PROC_CALL: Information about stored procedure calls, including start time, end time, and success/aborted
+  SQL_QLOG: Can be used to view list of queries run by a stored procedure
+  PG_PROC_INFO: Shows details about stored procedures and functions, including output arguments
+  STL_UTILITYTEXT: Stored procedure calls are logged after they are completed
+
+
 Limitation - 
 Doesn't support 
   - Sub-transactions hence limited support for exception handling blocks
@@ -29,3 +37,4 @@ Maximum size of the source code: 2MB
 Maximum number of levels for nested calls:  16
 Max number of input parameters: 32
 Max number of Output parameters: 32
+
