@@ -1,0 +1,22 @@
+Ensure that stored procedures are captured in your source control tool.
+If you plan to use stored procedures as a key element of your data processing, you should also establish a practice of committing all stored procedure changes to a source control system.
+You could also consider defining a specific user who is the owner of important stored procedures and automating the process of creating and modifying procedures.
+You can retrieve the source for existing stored procedures using the following command:
+SHOW procedure procedure_name;
+Use Exception block to capture error and also try using Notice to print steps/message of SP.
+Consider the security scope of each procedure and who calls it
+By default, stored procedures run with the permission of the user that calls them. Use the SECURITY DEFINER attribute to enable stored procedures to run with different permissions. For instance, explicitly revoke access to DELETE from an important table and define a stored procedure that executes the delete after checking a safe list.
+When using SECURITY DEFINER, take care to:
+Grant EXECUTE on the procedure to specific users, not to PUBLIC. This ensures that the procedure can’t be misused by general users.
+Qualify all database objects that the procedure accesses with the schema names if possible. For example, use myschema.mytable instead of just mytable.
+Set the search_path when creating the procedure by using the SET option. This prevents objects in other schemas with the same name from being affected by an important stored procedure.
+Use set-based logic and avoid manually looping over large datasets
+When manipulating data within your stored procedures, continue to use normal, set-based SQL as much as possible, for example, INSERT, UPDATE, DELETE.
+Stored procedures provide new control structures such as FOR and WHILE loops. These are useful for iterating over a small number of items, such as a list of tables. However, you should avoid using the loop structures to replace a set-based SQL operation. For example, iterating over millions of values to update them one-by-one is inefficient and slow.
+Be aware of REFCURSOR limits and use temp tables for larger result sets
+Result sets may be returned from a stored procedure either as a REFCURSOR or using temp tables.  REFCURSOR is an in-memory data structure and is the simplest option in many cases.
+However, there is a limit of one REFCURSOR per stored procedure. You may want to return multiple result sets, interact with results from multiple sub-procedures, or return millions of result rows (or more). In those cases, we recommend directing results to a temp table and returning a reference to the temp table as the output of your stored procedure.
+Keep procedures simple and nest procedures for complex processes
+Try to keep the logic of each stored procedure as simple possible. You maximize your flexibility and make your stored procedures more understandable by keeping them simple.
+The code of your stored procedures can become complex as you refine and enhance them. When you encounter a long and complex stored procedure, you can often simplify by moving sub-elements into a separate procedure that is called from the original procedure.
+
