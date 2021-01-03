@@ -1,1 +1,23 @@
+1. Use the superuser queue for Admin task - use set command so that your session is not consuming slot from other user queue. This way, you get highest priority
+2. Use different queue for different workload based on usergroup or querygroup, i.e. ETL, reporting user, data science 
+3. Use QMR Rules to log the bad query and take different action based on bad query type (CPU/IO)
+4. Keep WLM queues minimum , typically 3 to avoid unused queues
+5. Enable SQA -- Choose dynamic 
+6. For main cluster, keep concurrency to max 15 (for primary cluster) -- This will allow more memory existing running query, 
+so fast execution -- Total Memory/Min Concurrency.
+7. How to Handle burst of workload - Use Concurrency scaling or Elastic resize 
 
+Concurrency scaling: free for 1 hours out of 24 hours, so 30 hours free every month)
+1. Currently only supported for read queries 
+2. Scale out to multiple redshift cluster in seconds(soft limit 10 redshift nodes)
+3. Review max. concurrency need using wlm_apex.sql and wlm_apex_hourly.sql (for public redshift repo)
+4. Identify whether queries are queuing using queuing_queries.sql admin script (analyze the queue and enable concurrency scaling if required)
+
+Elastic resize: 
+1. Scales your cluster up and down in minutes to get optimal performance
+2. Schedules cluster resize using API or Console.
+
+
+Cost Control for Concurrency scaling and Redshift Spectrum:
+Create daily/weekly/monthly limits 
+log to system tables,Alerts,Disable this features when limit is crossed 
