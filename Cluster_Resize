@@ -1,0 +1,15 @@
+Add or remove nodes or change node types with resize operation 
+There are 3 ways to resize:
+1. Elastic resize - Most recommended option - Typically completes in 10 mins or less. You can even schedule this 
+2. Classic resize - Upto several hours depending on how much data we have 
+3. snapshot and restore with classic resize - If your customer don't want to lose unavailability. 
+
+Classic Resize Under the hood - 
+Here, new Redshift cluster of target config is provisioned 
+Metadata is copied in 20 mins 
+Streaming restore of actual data , takes upto hours 
+When restore is completed, CNAME is referenced to new leader node 
+
+Elastic resize Under the hood - 
+Slices are migrated to new nodes cluster and hence no. of slices remains same but these slices gets more memory and CPU more. If you want 
+you increase the slices then Classic Resize is only the option
