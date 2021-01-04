@@ -1,0 +1,26 @@
+RTO - How long it takes to recover from failure ?
+RPO - How much data loss customer is okay ?
+
+Snaphot is backup 
+
+Automatic snapshot every 8 hours or 5GB block changes and saves to S3. Retention is as you defined via console.(1 to 35 days) -- Its free
+Manual are forever. There is snapshot schduler (hour/daily)
+Snapshot are incremental 
+
+Restore:
+You can restore entire DB or set of tables. 
+Restore happens in following ways 
+1. Provisioning of new cluster upto 10 mins 
+2. Redshift new cluster is available for reads/write in next 20 mins 
+3. Data is automatically streamed from S3 snapshot 
+4. Data for in-flight queries is priritized and restored first 
+
+
+Restore of specific table:
+Restore doesn't have to be full cluster 
+Select the snapshot, src database, schema and table
+Restore to same cluster, but new database, schema and table 
+Note - You can use Redshift multi-table restore - Use MutlipleTableRestoreUtility from Github 
+
+
+
