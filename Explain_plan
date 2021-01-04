@@ -1,0 +1,32 @@
+use stl_explain or console to view plan of the query 
+e.g. Explain Select ***********
+step with major cost may be optimized , mainly happens because of data transfer 
+DS_DIST_NONE - No distribution (Best) 
+DS_DIST_ALL_NONE - 
+
+System Tables:
+STL_ --> contains 2/5 days of data eg. STL_ERRORS  
+STV_ --> Virtual tables that contains snapshot of current eg. STV_SESSIONS
+SVV_ --> System views reference to STV_ tables
+SVL_ --> System views reference to STL_ tables
+PG_ --> Stores schema Metadata eg. PG_TABLE_DEF
+
+
+Systemic Approach for optimization: 
+Node Type 
+Compute Node count 
+Disk utilization Percentage 
+Elastic Resize History --- stv_slices
+Concurrency Scaling Usage  --- svcs_Concurrency_Scaling_Usage
+WLM/QMR Config 
+SVV_Table_INFO -- SVV_Table_INFO , says about if some tables are good or bad 
+Redshift Advisor Output 
+STL_Alert_Event_Log -- It gives you event and solution, refer perf_alert.sql from github 
+
+You can also set customized cloudwatch Metric based on skewness, VarcharSize, Querytime, DiskbasedQueries, UncompressedQueries etc.
+
+ML based auto optimization by Redshift: 
+Automatic Analyze -- Enabled by default and it happens every hour, It is applied during lean hours (less CPU/IO)
+Automatic Vaccuum Delete -- Enabled by default and it happens every hour, It is applied during lean hours (less CPU/IO), If in between workload increases, Redshift smartly pauses the operation and again resumes later during less workload. Drop/Truncate doesn't requires this
+Automatic Table Distribution 
+Automatic Sort Key recommendation 
