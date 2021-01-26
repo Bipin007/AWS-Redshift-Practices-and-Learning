@@ -511,3 +511,321 @@ group by db_name, schema_name, table_name
 order by table_name,db_name, schema_name;
 
 
+---To provide the queries and metrics running during the cpu spike hours ----
+SELECT current_database()::character varying(15)            AS clustername,
+       sq.xid,
+       sq.pid,
+       sqm.query,
+       sq.querytxt,
+       sq.starttime                                         AS query_starttime,
+       sq.endtime                                           AS query_endtime,
+       date_diff('seconds'::text, sq.starttime, sq.endtime) AS total_query_execution_time_in_secs,
+       sqm.query_queue_time / 1000000                       AS query_queue_time_in_secs,
+       sqm.cpu_time / 1000000                               AS cpu_seconds,
+       'now'::text::date                                    AS dataset_date,
+       'Completed Queries'                                  AS query_type
+FROM stl_query_metrics sqm
+         JOIN stl_query sq ON sqm.query = sq.query
+WHERE sqm.segment = -1
+  AND sqm.cpu_time > 1000000000
+UNION ALL
+SELECT current_database()::character varying(15) AS clustername,
+       si.xid,
+       si.pid,
+       sqm.query,
+       si.text                                   AS querytxt,
+       si.starttime                              AS query_starttime,
+       NULL::"unknown"                           AS query_endtime,
+       NULL::"unknown"                           AS total_query_execution_time_in_secs,
+       sqm.query_queue_time / 1000000            AS query_queue_time_in_secs,
+       sqm.cpu_time / 1000000                    AS cpu_seconds,
+       'now'::text::date                         AS dataset_date,
+       'Running Queries'                         AS query_type
+FROM stv_query_metrics sqm
+         JOIN stv_inflight si ON sqm.query = si.query
+WHERE sqm.segment = -1
+  AND sqm.cpu_time > 1000000000;
+  
+ 
+---- To provide the queries and metrics running during the disk space spike hours -----
+SELECT current_database()::character varying(15)                                             AS clustername,
+       sq.xid,
+       sq.query,
+       sq.pid,
+       sq.querytxt,
+       sq.starttime                                                                          AS query_starttime,
+       sq.endtime                                                                            AS query_endtime,
+       sqms.query_execution_time                                                             AS query_execution_time_secs,
+       sqms.query_queue_time                                                                 AS query_queue_time_secs,
+       round(qs.data_in_mb::numeric::numeric(18, 0) / 1024.00 / 1024.00, 2)                  AS data_in_tb,
+       round(qs.workmem_estimated_mb::numeric::numeric(18, 0) / 1024.00 / 1024.00, 2)        AS workmem_estimated_tb,
+       round(sqms.query_blocks_read::numeric::numeric(18, 0) / 1024.00 / 1024.00, 2)         AS query_blocks_read_tb,
+       round(sqms.query_temp_blocks_to_disk::numeric::numeric(18, 0) / 1024.00 / 1024.00,
+             2)                                                                              AS query_temp_blocks_to_disk_tb,
+       'now'::text::date                                                                     AS dataset_date,
+       'Completed Queries'                                                                   AS query_type
+FROM stl_query sq
+         JOIN (SELECT svl_query_summary.query,
+                      sum(svl_query_summary.bytes) / 1024 / 1024   AS data_in_mb,
+                      sum(svl_query_summary.workmem) / 1024 / 1024 AS workmem_estimated_mb
+               FROM svl_query_summary
+               WHERE svl_query_summary.is_diskbased = 't'::bpchar
+                 AND (svl_query_summary."label"::text ~~* 'hash%'::text OR
+                      svl_query_summary."label"::text ~~* 'sort%'::text OR
+                      svl_query_summary."label"::text ~~* 'aggr%'::text OR
+                      svl_query_summary."label"::text ~~* 'save%'::text OR
+                      svl_query_summary."label"::text ~~* 'window%'::text OR
+                      svl_query_summary."label"::text ~~* 'unique%'::text)
+                 AND svl_query_summary.userid > 1
+               GROUP BY svl_query_summary.query) qs ON qs.query = sq.query
+         JOIN svl_query_metrics_summary sqms ON sq.query = sqms.query
+UNION ALL
+SELECT current_database()::character varying(15)                                      AS clustername,
+       si.xid,
+       si.query,
+       si.pid,
+       si.text                                                                        AS querytxt,
+       si.starttime                                                                   AS query_starttime,
+       NULL::"unknown"                                                                AS query_endtime,
+       NULL::"unknown"                                                                AS query_execution_time_secs,
+       sqm.query_queue_time                                                           AS query_queue_time_secs,
+       round(qs.data_in_mb::numeric::numeric(18, 0) / 1024.00 / 1024.00, 2)           AS data_in_tb,
+       round(qs.workmem_estimated_mb::numeric::numeric(18, 0) / 1024.00 / 1024.00, 2) AS workmem_estimated_tb,
+       round(sqm.blocks_read::numeric::numeric(18, 0) / 1024.00 / 1024.00, 2)         AS query_blocks_read_tb,
+       round(sqm.blocks_to_disk::numeric::numeric(18, 0) / 1024.00 / 1024.00, 2)      AS query_temp_blocks_to_disk_tb,
+       'now'::text::date                                                              AS dataset_date,
+       'Running queries'                                                              AS query_type
+FROM stv_inflight si
+         JOIN (SELECT svl_query_summary.query,
+                      sum(svl_query_summary.bytes) / 1024 / 1024   AS data_in_mb,
+                      sum(svl_query_summary.workmem) / 1024 / 1024 AS workmem_estimated_mb
+               FROM svl_query_summary
+               WHERE svl_query_summary.is_diskbased = 't'::bpchar
+                 AND (svl_query_summary."label"::text ~~* 'hash%'::text OR
+                      svl_query_summary."label"::text ~~* 'sort%'::text OR
+                      svl_query_summary."label"::text ~~* 'aggr%'::text OR
+                      svl_query_summary."label"::text ~~* 'save%'::text OR
+                      svl_query_summary."label"::text ~~* 'window%'::text OR
+                      svl_query_summary."label"::text ~~* 'unique%'::text)
+                 AND svl_query_summary.userid > 1
+               GROUP BY svl_query_summary.query) qs ON qs.query = si.query
+         JOIN stv_query_metrics sqm ON si.query = sqm.query
+WHERE sqm.segment = -1;
+
+----- Query Terminator -------
+create or replace view test_schema.vw_query_metrics(userid, query, service_class, dimension, segment, step, step_label, query_cpu_time, query_blocks_read, query_execution_time, query_cpu_usage_percent, query_temp_blocks_to_disk, segment_execution_time, cpu_skew, io_skew, scan_row_count, join_row_count, nested_loop_join_row_count, return_row_count, spectrum_scan_row_count, spectrum_scan_size_mb, query_queue_time) as
+	SELECT qm.userid,
+       qm.query,
+       qm.service_class,
+       CASE
+           WHEN qm.segment = -1 AND qm.step_type = -1 AND qm.step = -1 THEN 'query'::character varying
+           WHEN qm.segment > -1 AND qm.step_type = -1 AND qm.step = -1 THEN 'segment'::character varying
+           WHEN qm.segment > -1 AND qm.step_type > -1 AND qm.step > -1 THEN 'step'::character varying
+           ELSE NULL::character varying
+           END::character varying(24)                                    AS dimension,
+       CASE
+           WHEN qm.segment = -1 THEN NULL::integer
+           ELSE qm.segment
+           END                                                           AS segment,
+       CASE
+           WHEN qm.step = -1 THEN NULL::integer
+           ELSE qm.step
+           END                                                           AS step,
+       CASE
+           WHEN qm.step_type = 1 THEN 'scan'::character varying
+           WHEN qm.step_type = 2 THEN 'insert'::character varying
+           WHEN qm.step_type = 3 THEN 'aggr'::character varying
+           WHEN qm.step_type = 4 THEN 'return'::character varying
+           WHEN qm.step_type = 6 THEN 'sort'::character varying
+           WHEN qm.step_type = 7 THEN 'merge'::character varying
+           WHEN qm.step_type = 8 THEN 'dist'::character varying
+           WHEN qm.step_type = 9 THEN 'bcast'::character varying
+           WHEN qm.step_type = 10 THEN 'hjoin'::character varying
+           WHEN qm.step_type = 11 THEN 'mjoin'::character varying
+           WHEN qm.step_type = 12 THEN 'save'::character varying
+           WHEN qm.step_type = 14 THEN 'hash'::character varying
+           WHEN qm.step_type = 15 THEN 'nloop'::character varying
+           WHEN qm.step_type = 16 THEN 'project'::character varying
+           WHEN qm.step_type = 17 THEN 'limit'::character varying
+           WHEN qm.step_type = 18 THEN 'unique'::character varying
+           WHEN qm.step_type = 20 THEN 'delete'::character varying
+           WHEN qm.step_type = 26 THEN 'limit'::character varying
+           WHEN qm.step_type = 29 THEN 'window'::character varying
+           WHEN qm.step_type = 32 THEN 'udf'::character varying
+           WHEN qm.step_type = 33 THEN 'unique'::character varying
+           WHEN qm.step_type = 37 THEN 'returnclient'::character varying
+           WHEN qm.step_type = 38 THEN 'returnleader'::character varying
+           WHEN qm.step_type = 40 THEN 'spectrumscan'::character varying
+           ELSE NULL::character varying
+           END::character varying(30)                                    AS step_label,
+       CASE
+           WHEN qm.segment = -1 AND qm.step_type = -1 AND qm.step = -1 THEN ceiling(
+                       CASE
+                           WHEN "max"(qm.cpu_time)::numeric::numeric(18, 0)::numeric(38, 6) =
+                                (- 1::numeric::numeric(18, 0)::numeric(38, 6)) THEN NULL::numeric::numeric(18, 0)
+                           ELSE "max"(qm.cpu_time)::numeric::numeric(18, 0)::numeric(38, 6)
+                           END / 1000000::numeric::numeric(18, 0)::numeric(38, 6))
+           ELSE NULL::numeric::numeric(18, 0)
+           END::bigint                                                   AS query_cpu_time,
+       CASE
+           WHEN qm.segment = -1 AND qm.step_type = -1 AND qm.step = -1 THEN
+               CASE
+                   WHEN "max"(qm.blocks_read) = -1 THEN NULL::bigint
+                   ELSE "max"(qm.blocks_read)
+                   END
+           ELSE NULL::bigint
+           END                                                           AS query_blocks_read,
+       ceiling(q.exec_time::numeric::numeric(18, 0)::numeric(38, 6) /
+               1000000::numeric::numeric(18, 0)::numeric(38, 6))::bigint AS query_execution_time,
+       round(
+               CASE
+                   WHEN qm.segment = -1 AND qm.step_type = -1 AND qm.step = -1 THEN 100::numeric::numeric(18, 0) *
+                                                                                    "max"((
+                                                                                                  CASE
+                                                                                                      WHEN qm.cpu_time = -1
+                                                                                                          THEN NULL::bigint
+                                                                                                      ELSE qm.cpu_time
+                                                                                                      END::numeric::numeric(18, 0) +
+                                                                                                  0.00001) / (
+                                                                                                  CASE
+                                                                                                      WHEN qm.run_time = -1
+                                                                                                          THEN NULL::bigint
+                                                                                                      ELSE qm.run_time
+                                                                                                      END::numeric::numeric(18, 0) +
+                                                                                                  0.00001))
+                   ELSE NULL::numeric::numeric(18, 0)
+                   END, 2)::numeric(38, 2)                               AS query_cpu_usage_percent,
+       CASE
+           WHEN qm.segment = -1 AND qm.step_type = -1 AND qm.step = -1 THEN
+               CASE
+                   WHEN "max"(qm.blocks_to_disk) = -1 THEN NULL::bigint
+                   ELSE "max"(qm.blocks_to_disk)
+                   END
+           ELSE NULL::bigint
+           END                                                           AS query_temp_blocks_to_disk,
+       CASE
+           WHEN qm.segment > -1 AND qm.step_type = -1 THEN ceiling(
+                       CASE
+                           WHEN "max"(qm.max_run_time) = -1 THEN NULL::bigint
+                           ELSE "max"(qm.max_run_time)
+                           END::numeric::numeric(18, 0)::numeric(38, 6) /
+                       1000000::numeric::numeric(18, 0)::numeric(38, 6))
+           ELSE NULL::numeric::numeric(18, 0)
+           END::bigint                                                   AS segment_execution_time,
+       round(
+               CASE
+                   WHEN qm.segment > -1 AND qm.step_type = -1 AND "max"(qm.max_cpu_time) > 0 AND "max"(qm.cpu_time) > 0
+                       THEN qm.slices::numeric::numeric(18, 0) * "max"((
+                                                                               CASE
+                                                                                   WHEN qm.max_cpu_time = -1 THEN NULL::bigint
+                                                                                   ELSE qm.max_cpu_time
+                                                                                   END::numeric::numeric(18, 0) +
+                                                                               0.00001) / (
+                                                                               CASE
+                                                                                   WHEN qm.cpu_time = -1 THEN NULL::bigint
+                                                                                   ELSE qm.cpu_time
+                                                                                   END::numeric::numeric(18, 0) +
+                                                                               0.00001))
+                   ELSE NULL::numeric::numeric(18, 0)
+                   END, 2)::numeric(38, 2)                               AS cpu_skew,
+       round(
+               CASE
+                   WHEN qm.segment > -1 AND qm.step_type = -1 AND "max"(qm.max_blocks_read) > 0 AND
+                        "max"(qm.blocks_read) > 0 THEN qm.slices::numeric::numeric(18, 0) * "max"((
+                                                                                                          CASE
+                                                                                                              WHEN qm.max_blocks_read = -1
+                                                                                                                  THEN NULL::integer
+                                                                                                              ELSE qm.max_blocks_read
+                                                                                                              END::numeric::numeric(18, 0) +
+                                                                                                          0.00001) / (
+                                                                                                          CASE
+                                                                                                              WHEN qm.blocks_read = -1
+                                                                                                                  THEN NULL::bigint
+                                                                                                              ELSE qm.blocks_read
+                                                                                                              END::numeric::numeric(18, 0) +
+                                                                                                          0.00001))
+                   ELSE NULL::numeric::numeric(18, 0)
+                   END, 2)::numeric(38, 2)                               AS io_skew,
+       CASE
+           WHEN qm.segment > -1 AND qm.step_type = 1 AND qm.step > -1 THEN
+               CASE
+                   WHEN "max"(qm."rows") = -1 THEN NULL::bigint
+                   ELSE "max"(qm."rows")
+                   END
+           ELSE NULL::bigint
+           END                                                           AS scan_row_count,
+       CASE
+           WHEN qm.segment > -1 AND (qm.step_type = 10 OR qm.step_type = 11 OR qm.step_type = 15) AND qm.step > -1 THEN
+               CASE
+                   WHEN "max"(qm."rows") = -1 THEN NULL::bigint
+                   ELSE "max"(qm."rows")
+                   END
+           ELSE NULL::bigint
+           END                                                           AS join_row_count,
+       CASE
+           WHEN qm.segment > -1 AND qm.step_type = 15 AND qm.step > -1 THEN
+               CASE
+                   WHEN "max"(qm."rows") = -1 THEN NULL::bigint
+                   ELSE "max"(qm."rows")
+                   END
+           ELSE NULL::bigint
+           END                                                           AS nested_loop_join_row_count,
+       CASE
+           WHEN qm.segment > -1 AND qm.step_type = 37 AND qm.step > -1 THEN
+               CASE
+                   WHEN "max"(qm."rows") = -1 THEN NULL::bigint
+                   ELSE "max"(qm."rows")
+                   END
+           ELSE NULL::bigint
+           END                                                           AS return_row_count,
+       CASE
+           WHEN qm.segment > -1 AND qm.step_type = 40 AND qm.step > -1 THEN
+               CASE
+                   WHEN "max"(qm."rows") = -1 THEN NULL::bigint
+                   ELSE "max"(qm."rows")
+                   END
+           ELSE NULL::bigint
+           END                                                           AS spectrum_scan_row_count,
+       CASE
+           WHEN qm.segment > -1 AND qm.step_type = 40 AND qm.step > -1 THEN
+               CASE
+                   WHEN "max"(qm.query_scan_size) = -1 THEN NULL::bigint
+                   ELSE "max"(qm.query_scan_size)
+                   END
+           ELSE NULL::bigint
+           END                                                           AS spectrum_scan_size_mb,
+       CASE
+           WHEN qm.segment = -1 AND qm.step_type = -1 AND qm.step = -1 THEN ceiling(
+                       CASE
+                           WHEN "max"(qm.query_queue_time) = -1 THEN NULL::bigint
+                           ELSE "max"(qm.query_queue_time)
+                           END::numeric::numeric(18, 0)::numeric(38, 6) /
+                       1000000::numeric::numeric(18, 0)::numeric(38, 6))
+           ELSE NULL::numeric::numeric(18, 0)
+           END::bigint                                                   AS query_queue_time
+FROM stv_query_metrics qm
+         JOIN stv_wlm_query_state q USING (service_class, query)
+GROUP BY qm.userid, qm.query, qm.service_class, qm.slices, qm.segment, qm.step_type, qm.step, q.exec_time;
+
+
+create or replace view test_schema.vw_query_metrics_summary(userid, query, service_class, query_cpu_time, query_blocks_read, query_execution_time, query_cpu_usage_percent, query_temp_blocks_to_disk, segment_execution_time, cpu_skew, io_skew, scan_row_count, join_row_count, nested_loop_join_row_count, return_row_count, spectrum_scan_row_count, spectrum_scan_size_mb, query_queue_time) as
+	SELECT svl_query_metrics.userid,
+       svl_query_metrics.query,
+       svl_query_metrics.service_class,
+       "max"(svl_query_metrics.query_cpu_time)             AS query_cpu_time,
+       "max"(svl_query_metrics.query_blocks_read)          AS query_blocks_read,
+       "max"(svl_query_metrics.query_execution_time)       AS query_execution_time,
+       "max"(svl_query_metrics.query_cpu_usage_percent)    AS query_cpu_usage_percent,
+       "max"(svl_query_metrics.query_temp_blocks_to_disk)  AS query_temp_blocks_to_disk,
+       "max"(svl_query_metrics.segment_execution_time)     AS segment_execution_time,
+       "max"(svl_query_metrics.cpu_skew)                   AS cpu_skew,
+       "max"(svl_query_metrics.io_skew)                    AS io_skew,
+       "max"(svl_query_metrics.scan_row_count)             AS scan_row_count,
+       "max"(svl_query_metrics.join_row_count)             AS join_row_count,
+       "max"(svl_query_metrics.nested_loop_join_row_count) AS nested_loop_join_row_count,
+       "max"(svl_query_metrics.return_row_count)           AS return_row_count,
+       "max"(svl_query_metrics.spectrum_scan_row_count)    AS spectrum_scan_row_count,
+       "max"(svl_query_metrics.spectrum_scan_size_mb)      AS spectrum_scan_size_mb,
+       "max"(svl_query_metrics.query_queue_time)           AS query_queue_time
+FROM test_schema.vw_query_metrics svl_query_metrics
+GROUP BY svl_query_metrics.userid, svl_query_metrics.query, svl_query_metrics.service_class;
