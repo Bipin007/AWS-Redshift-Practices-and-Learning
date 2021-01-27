@@ -829,3 +829,28 @@ create or replace view test_schema.vw_query_metrics_summary(userid, query, servi
        "max"(svl_query_metrics.query_queue_time)           AS query_queue_time
 FROM test_schema.vw_query_metrics svl_query_metrics
 GROUP BY svl_query_metrics.userid, svl_query_metrics.query, svl_query_metrics.service_class;
+
+
+--- Cost of the Redshift last query ran ---- 
+with spectrum_scan as (
+    select query,
+           sum(
+                   CASE
+                       WHEN s3_scanned_bytes > 0 THEN GREATEST(10, CEIL(s3_scanned_bytes::FLOAT / 1024 / 1024))
+                       ELSE 0 END
+               ) as spectrum_scan_size_mb
+    from svl_s3query_summary
+    where aborted = 0
+    group by query)
+select sqms.query                                                as query_id,
+       nvl(ss.spectrum_scan_size_mb, 0) * 0.00000178098678587700 as spectrum_$,
+       nvl(sqms.query_execution_time, 0) * 0.0008248445743196    as exe_time_$,
+       (
+               nvl(sqms.query_blocks_read, 0) + nvl(sqms.query_temp_blocks_to_disk, 0)
+           ) * 0.0000010990726747                                as io_$,
+       nvl(ss.spectrum_scan_size_mb, 0)                          as spectrum_mb,
+       *
+from svl_query_metrics_summary sqms
+         left join spectrum_scan ss
+                   on ss.query = sqms.query
+where sqms.query = pg_last_query_id();
