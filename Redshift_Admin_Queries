@@ -1,3 +1,14 @@
+1. Run the following queries to figure out active queries on the cluster
+
+Select pid, userid, user_name, query from stv_recents where status = 'Running'
+--This will give any query running on cluster or waiting in a queue to start execution.
+
+select * from stv_inflight;
+--The above query will give all queries actually running on the cluster.
+
+select * from stv_wlm_query_queue_state;
+--The above query gives the query queue state.
+
 -- find which tables have been granted to a group and also which users have been added to the group
 select g.groname,u.usename FROM pg_group g, pg_user u WHERE u.usesysid = ANY(g.grolist) ORDER BY 1,2;
 
