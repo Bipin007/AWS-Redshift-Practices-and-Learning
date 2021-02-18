@@ -865,3 +865,37 @@ from svl_query_metrics_summary sqms
          left join spectrum_scan ss
                    on ss.query = sqms.query
 where sqms.query = pg_last_query_id();
+
+
+
+--To check Queries currently running with PID
+SELECT *
+FROM stv_inflight;
+
+--TO chcek queries in execution + waiting queue of redshift
+SELECT *
+FROM STV_Recents
+WHERE STATUS = 'Running';
+
+--TO get PIds from external_ro and rw users, hubble etc
+SELECT *
+FROM STV_Recents
+WHERE STATUS = 'Running'
+AND   userid IN (216,267,217,172)
+ORDER BY userid;
+
+--To get the queries executing in the queue with execution time
+SELECT *
+FROM STV_WLM_QUERY_STATE
+WHERE STATE = 'Running'
+ORDER BY exec_time DESC;
+
+--Queries in waiting queue of redshift cluster
+SELECT *
+FROM STV_WLM_QUERY_QUEUE_STATE;
+
+--To cancel a query 
+SELECT pg_terminate_backend(PID);
+
+--To cancel a query 
+CANCLE PID;
