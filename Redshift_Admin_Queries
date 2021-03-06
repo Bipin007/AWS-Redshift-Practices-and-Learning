@@ -899,3 +899,13 @@ SELECT pg_terminate_backend(PID);
 
 --To cancel a query 
 CANCLE PID;
+
+
+--- Get the number of commit's per hour from Redshift
+Better to filter out the internal Redshift bootstrap user (rdsdb).  Use the following:  SELECT date_trunc('h',startwork) datehour, count(a.xid) commits, sum(commit_work_duration_ms) commit_work_ms
+FROM (select xid, startwork, endtime, datediff(ms,startwork,endtime) commit_work_duration_ms
+from stl_commit_stats where node=-1) a
+JOIN (select distinct xid,userid from svl_statementtext where sequence=0) b ON a.xid = b.xid
+WHERE startwork >=  dateadd(day, -1, current_Date)
+AND b.userid > 1
+GROUP BY 1 ORDER BY 1;
