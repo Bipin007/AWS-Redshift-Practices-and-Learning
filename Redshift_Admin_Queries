@@ -1,7 +1,9 @@
-1. Run the following queries to figure out active queries on the cluster
+1. To know locking tables in Redshift click link - https://aws.amazon.com/premiumsupport/knowledge-center/prevent-locks-blocking-queries-redshift/ 
+
+2. Run the following queries to figure out active queries on the cluster
 
 Select pid, userid, user_name, query from stv_recents where status = 'Running'
---This will give any query running on cluster or waiting in a queue to start execution.
+--Above will give any query running on cluster or waiting in a queue to start execution.
 
 select * from stv_inflight;
 --The above query will give all queries actually running on the cluster.
