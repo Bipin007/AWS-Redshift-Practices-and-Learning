@@ -915,3 +915,7 @@ GROUP BY 1 ORDER BY 1;
 select s1.userid,starttime,(endtime - starttime) as execution_time, s1.query, s1.querytxt, s2.total_exec_time as query_execution_time 
 from STL_QUERY s1 join STL_WLM_QUERY s2 on s1.query=s2.query
 order by query_execution_time desc;
+
+-- unique user querying on system in last 5 days
+select distinct pu.usename 
+from STL_QUERY sq join pg_catalog.pg_user pu on pu.usesysid = sq.userid 
