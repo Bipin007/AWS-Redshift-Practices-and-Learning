@@ -910,3 +910,8 @@ JOIN (select distinct xid,userid from svl_statementtext where sequence=0) b ON a
 WHERE startwork >=  dateadd(day, -1, current_Date)
 AND b.userid > 1
 GROUP BY 1 ORDER BY 1;
+
+-- QueryBench Mark : Query execution time
+select s1.userid,starttime,(endtime - starttime) as execution_time, s1.query, s1.querytxt, s2.total_exec_time as query_execution_time 
+from STL_QUERY s1 join STL_WLM_QUERY s2 on s1.query=s2.query
+order by query_execution_time desc;
