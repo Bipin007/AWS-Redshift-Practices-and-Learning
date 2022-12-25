@@ -919,3 +919,71 @@ order by query_execution_time desc;
 -- unique user querying on system in last 5 days
 select distinct pu.usename 
 from STL_QUERY sq join pg_catalog.pg_user pu on pu.usesysid = sq.userid 
+
+-- five most recent queries
+select query, trim(querytxt) as sqlquery from stl_query order by query desc limit 5;
+
+-- query returns the time elapsed in descending order for queries
+select query, datediff(seconds, starttime, endtime), trim(querytxt) as sqlquery
+from stl_query
+where starttime >= '2022-03-08 00:00' and endtime < '2022-03-09 00:00'
+and sqlquery like('%table%')
+order by date_diff desc;
+
+-- Query to check errorline
+select process, errcode, linenum as line, trim(error) as err from stl_error;
+
+
+-- check query is aborted or cancelled
+select * from SVL_STATEMENTTEXT where text ilike '%cancel%' and xid
+in (select xid from STL_QUERY where query =28740884);
+
+select * from SVL_STATEMENTTEXT where text ilike '%abort%' and xid in (select xid from STL_QUERY where query = 28740884);
+
+
+-- Query to check queries count by users
+SELECT
+cast(q.starttime as date) as date,q.userid,u.usename as username, COUNT( * ) AS queries
+from stl_query q, pg_user u
+where cast(starttime as date) >= '2022-12-23' and endtime < '2022-12-25'
+and q.userid= u.usesysid
+group by 1,2,3
+order by date asc;
+
+-- Query to find count in specific range
+SELECT
+q.userid,u.usename as username, COUNT( * ) AS queries
+FROM stl_query q, pg_user u
+where starttime >= '2022-12-23 05:49' and endtime < '2022-12-25 07:00'
+and q.userid= u.usesysid
+group by 1, 2;
+
+
+--Query to check CPU time and logs
+select stq.userid, stq.query, trim(stq.label) as label, stq.xid, stq.pid, svq.service_class, query_cpu_time
+,query_cpu_usage_percent as "cpu_%",starttime, endtime, datediff(s,starttime, endtime) as duration_s,
+substring(stq.querytxt,1,100) as querytext from stl_query stq
+join svl_query_metrics svq on stq.query=svq.query
+where query_cpu_usage_percent is not null --and starttime > sysdate - 1
+and querytext like('%employee%')
+order by query_cpu_usage_percent desc;
+
+--Table to check rows returned
+SELECT query, return_row_count from SVL_QUERY_METRICS_SUMMARY where query=177585925;
+
+-- Query to check log
+select q.query,q.userid,u.usename as username,starttime,endtime, datediff(seconds, starttime, endtime),return_row_count,
+trim(querytxt) as sqlquery
+from stl_query q,pg_user u,SVL_QUERY_METRICS_SUMMARY s
+
+
+-- Check Query DDL
+select q.userid,u.usename as username,starttime,endtime,
+trim(querytxt) as sqlquery
+trim(text) as sqlquery,q.pid,q.label,q.xid,q.sequence, q.type
+from stl_query q,pg_user u
+from SVL_STATEMENTTEXT q,pg_user u
+where q.starttime >= '2022-04-21 05:49' and endtime < '2022-04-21 07:00'
+and q.userid= u.usesysid
+--and userid like('%100%')
+and text like('%table_name%');
